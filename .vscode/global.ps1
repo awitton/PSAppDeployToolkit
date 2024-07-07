@@ -15,6 +15,13 @@ Modification Log
 20240707-002 AW Add SandboxFiles to $scriptState.  
 20240707-003 AW Split $scriptState assignments out of the custom object definition so that they
                 can build upon a single ServiceFolder assignment.
+20240707-004 AW Add $AppName parameter so that the script can run independently of VSCode
+20240707-005 AW Add support for reading the psadt.json appdef file
+
+
+VSCode Debug Strings
+--------------------
+"args": ["-AppName 'GoogleChrome'"]
 
 #>
 
@@ -44,6 +51,8 @@ param(
 
 $scriptState = [PSCustomObject]@{
     AppCachePath = ""
+    AppDef = [System.Collections.ArrayList]@()
+    AppDefItem = $null
     AppDefName = "psadt.json"
     AppDefPath = ""
     Application = ""
@@ -52,20 +61,24 @@ $scriptState = [PSCustomObject]@{
     ConfigFolderName = "00-Config"
     ConfigFolderPath = ""
     Desktop = ""
+    FilesFolderName = "Files"
+    FilesFolderPath = ""
     IntuneFolderName = "IntuneApps"
     IntuneFolderPath = ""
     LogonCommand = "LogonCommand.ps1"
-    OutputName = "20-Output"
+    OutputFolderName = "20-Output"
     OutputFolderPath = ""
     ProdFolderName = "02-Prod"
     ProdFolderPath = ""
-    PSAppDeployName = "10-PSAppDeployToolkit"
-    PSAppDeployPath = ""
+    PSAppDeployFolderName = "10-PSAppDeployToolkit"
+    PSAppDeployFolderPath = ""
     RepoFolderName = "01-Repo"
     RepoFolderPath = ""
-    SandboxFilesName = "30-SandboxFiles"
-    SandboxFilesPath = ""
+    SandboxFilesFolderName = "30-SandboxFiles"
+    SandboxFilesFolderPath = ""
     ServiceFolderPath = "C:\Service"
+    ToolkitFolderName = "Toolkit"
+    ToolkitFolderPath = ""
     UtilsFolderName = "90-Utils"
     UtilsFolderPath = ""
     WDADesktop = "C:\Users\WDAGUtilityAccount\Desktop"
@@ -77,47 +90,106 @@ $scriptState = [PSCustomObject]@{
 ###################################################################################################
 
 # Build out our name/path variables starting from a base of $scriptState.ServiceFolderPath
-
-
-$scriptState.IntuneFolder = Join-Path -Path $scriptState.ServiceFolder -ChildPath $scriptState.IntuneAppsName
+$scriptState.IntuneFolderPath = Join-Path -Path $scriptState.ServiceFolderPath -ChildPath $scriptState.IntuneFolderName
 
 # 00-Config
 $scriptState.ConfigFolderPath = Join-Path -Path $scriptState.IntuneFolderPath -ChildPath $scriptState.ConfigFolderName
+$scriptState.AppDefPath = Join-Path -Path $scriptState.ConfigFolderPath -ChildPath $scriptState.AppDefName
 
 # 01-Repo
-$scriptState.ConfigFolderPath = Join-Path -Path $scriptState.IntuneFolderPath -ChildPath $scriptState.RepoFolderName
+$scriptState.RepoFolderPath = Join-Path -Path $scriptState.IntuneFolderPath -ChildPath $scriptState.RepoFolderName
 
 # 02-Prod
-$scriptState.ConfigFolderPath = Join-Path -Path $scriptState.IntuneFolderPath -ChildPath $scriptState.ProdFolderName
+$scriptState.ProdFolderPath = Join-Path -Path $scriptState.IntuneFolderPath -ChildPath $scriptState.ProdFolderName
 
 # 10-PSAppDeployToolkit
-$scriptState.ConfigFolderPath = Join-Path -Path $scriptState.IntuneFolderPath -ChildPath $scriptState.PSAppDeployFolderName
+$scriptState.PSAppDeployFolderPath = Join-Path -Path $scriptState.IntuneFolderPath -ChildPath $scriptState.PSAppDeployFolderName
+$scriptState.ToolkitFolderPath = Join-Path $scriptState.PSAppDeployFolderPath -ChildPath $scriptState.ToolkitFolderName
 
 # 20-Output
-$scriptState.IntuneOutputFolder = Join-Path -Path $scriptState.IntuneFolder -ChildPath $scriptState.OutputFolderName
+$scriptState.OutputFolderPath = Join-Path -Path $scriptState.IntuneFolderPath -ChildPath $scriptState.OutputFolderName
 
 # 30-SandboxFiles
-$scriptState.SandboxFiles = Join-Path -Path $scriptState.IntuneFolder -ChildPath $scriptState.SandboxFilesName
+$scriptState.SandboxFilesFolderPath = Join-Path -Path $scriptState.IntuneFolderPath -ChildPath $scriptState.SandboxFilesFolderName
 
 # 90-Utils
-$scriptState.ConfigFolderPath = Join-Path -Path $scriptState.IntuneFolderPath -ChildPath $scriptState.UtilsFolderName
+$scriptState.UtilsFolderPath = Join-Path -Path $scriptState.IntuneFolderPath -ChildPath $scriptState.UtilsFolderName
 
 # 99-Cache
-$scriptState.Application = "$(& git branch --show-current)"
-$scriptState.CacheFolderPath = Join-Path $scriptState.IntuneFolder -ChildPath $scriptState.CacheFolderName
-$scriptState.AppCache = Join-Path $scriptState.CacheFolderPath -ChildPath $scriptState.Application
+if ($AppName) {
+    $scriptState.Application = $AppName
+    Write-Host "Assign Application from AppName parameter: $AppName"
+} else {
+    $gitBranch = "$(& git branch --show-current)"
+    $scriptState.Application = $gitBranch
+    Write-Host "Assign Application from Git branch: $gitBranch"
+}
+
+$scriptState.CacheFolderPath = Join-Path $scriptState.IntuneFolderPath -ChildPath $scriptState.CacheFolderName
+$scriptState.AppCachePath = Join-Path $scriptState.CacheFolderPath -ChildPath $scriptState.Application
+$scriptState.FilesFolderPath = Join-Path $scriptState.AppCachePath -Childpath $scriptState.FilesFolderName
 
 # Miscellaneous
 $scriptState.Desktop = [string]([Environment]::GetFolderPath('DesktopDirectory'))
 
 
 # Display the configuration variables
-$scriptState
+$scriptState | 
+    Select-Object Application, ServiceFolderPath, IntuneFolderPath, ConfigFolderPath, `
+        AppDefPath, RepoFolderPath, ProdFolderPath, PSAppDeployFolderPath, ToolkitFolderPath, OutputFolderPath, `
+        SandboxFilesFolderPath, UtilsFolderPath, CacheFolderPath, AppCachePath, WDADesktop
+
+
+# Import our JSON application config file
+if (Test-Path -Path $scriptState.AppDefPath -PathType Leaf) {
+    Write-Host -MsgSev "debug" -Message "Check for JSON file: Found"
+    
+    
+    # Import the file into an object
+    try {
+        $scriptState.AppDef = Get-Content -Path $scriptState.AppDefPath -Raw | ConvertFrom-Json
+        Write-Host "Load AppDef file: Pass"
+    } catch {
+        Write-Host "Load AppDef file: Fail"
+        Write-Warning "Failed to load AppDef file.  Cannot continue."
+        Exit 1
+    }
+} else {
+    Write-Host -MsgSev "debug" -Message "Check for JSON file: Not Found"
+    Write-Warning "Failed to find AppDef file.  Cannot continue."
+    Exit 1
+}
+
+
+# Check through our new AppDef array for an AppName that matches $scriptState.Application
+$scriptState.AppDefItem = $scriptState.AppDef |
+    Where-Object {$_.AppName -eq "$($scriptState.Application)"}
+
+if ($scriptState.AppDefitem) {
+    Write-Host "Check AppDef array for $($scriptState.Application): Found"
+    $scriptState.AppDefItem
+} else {
+    Write-Warning "Check AppDef array for $($scriptState.Application): Not Found"
+    Write-Warning "Failed to find application.  Cannot continue."
+    Exit 1
+}
+
 
 # Cache resources
-Write-Host "Removing $($scriptState.AppCache)" -ForegroundColor Green
-Remove-Item -Path "$($scriptState.AppCache)" -Recurse -Force -ErrorAction Ignore
+# Remove
+Write-Host "Removing cache folder $($scriptState.AppCachePath)"
+Remove-Item -Path "$($scriptState.AppCachePath)" -Recurse -Force -ErrorAction Ignore
 
-Write-Host "Updating $($scriptState.AppCache)" -ForegroundColor Green
-Copy-Item -Path "Toolkit" -Destination "$($scriptState.AppCache)" -Recurse -Force -Verbose -ErrorAction Ignore
+# Update
+Write-Host "Updating cache folder $($scriptState.AppCachePath) from $($scriptState.ToolkitFolderPath)"
+Copy-Item -Path "$($scriptState.ToolkitFolderPath)" -Destination "$($scriptState.AppCachePath)" -Recurse -Force -Verbose -ErrorAction Ignore
+
+# Copy application installer files from the related 02-Prod folder
+$sourceFilesFolder = Join-Path -Path $scriptState.ProdFolderPath -ChildPath $scriptState.Application
+$sourceFilesFolder += "\*"
+
+Write-Host "Adding AppDef files from $sourceFilesFolder to Files cache folder"
+Copy-Item -Path $sourceFilesFolder -Destination $scriptState.FilesFolderPath -Force -Verbose
+
+
 #explorer "$Cache"

@@ -1,5 +1,6 @@
 # Configure the sandbox environment to better match a prod PC
 $appName = "Deploy-Application.exe"
+$appDesktopFolder = "devops"
 
 # Create the default Intune log folder
 $intuneLogFolder = "$env:ProgramData\Microsoft\IntuneManagementExtension\Logs"
@@ -16,7 +17,7 @@ $shortcut = $WscriptObj.CreateShortcut($shortcutPath)
 $shortcut.TargetPath = $targetPath
 $shortcut.Save()
 
-$intuneAppPath = "{0}\{1}\{2}" -f $desktopFolder, "devops", $appName
+$intuneAppPath = "{0}\{1}\{2}" -f $desktopFolder, $appDesktopFolder, $appName
 
 Write-host "Testing has started..." -ForegroundColor Cyan
 Start-Process -FilePath $intuneAppPath -Wait

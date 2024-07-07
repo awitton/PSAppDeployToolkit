@@ -18,7 +18,7 @@ Modification Log
 . ".vscode\Global.ps1"
 
 $sourceLogonCommand = ".vscode\$($scriptState.LogonCommand)"
-$hostFolder = $scriptState.Win32App
+$hostFolder = "{0}\{1}" -f $scriptState.Win32App, $scriptState.Application
 $sbFolder = $scriptState.WDADesktop
 $sbOutFile = "{0}\{1}.wsb" -f $scriptState.Win32App, $scriptState.Application
 $sbLogonCommand = "{0}\{1}" -f $sbFolder, $scriptState.LogonCommand

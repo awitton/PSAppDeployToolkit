@@ -1,6 +1,6 @@
 # Configure the sandbox environment to better match a prod PC
 $appName = "Deploy-Application.exe"
-$appDesktopFolder = "devops"
+$appDesktopFolder = "DevOps"
 
 # Create the default Intune log folder
 $intuneLogFolder = "$env:ProgramData\Microsoft\IntuneManagementExtension\Logs"

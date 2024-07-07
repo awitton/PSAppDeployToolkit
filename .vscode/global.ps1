@@ -17,6 +17,8 @@ Modification Log
                 can build upon a single ServiceFolder assignment.
 20240707-004 AW Add $AppName parameter so that the script can run independently of VSCode
 20240707-005 AW Add support for reading the psadt.json appdef file
+20240707-006 AW Add the $Action parameter for linking to the build or sandbox scripts from global
+                rather than the other way around.
 
 
 VSCode Debug Strings
@@ -40,7 +42,11 @@ VSCode Debug Strings
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [string]$AppName
+    [string]$AppName,
+
+    [Parameter()]
+    [string]$Action
+
 )
 
 
@@ -191,5 +197,18 @@ $sourceFilesFolder += "\*"
 Write-Host "Adding AppDef files from $sourceFilesFolder to Files cache folder"
 Copy-Item -Path $sourceFilesFolder -Destination $scriptState.FilesFolderPath -Force -Verbose
 
+# Are we chaining to build or sandbox?
+switch ($Action) {
+    "build" {$scriptName = "build.ps1"; break;}
+    "sandbox" {$scriptName = "sandbox.ps1"; break;}
+    default {$scriptName = $null; break;}
+}
 
-#explorer "$Cache"
+if ($scriptName) {
+    Write-Host "Running the $Action script"
+    $PSScriptRoot
+    $scriptPath = Join-Path -Path $scriptState.PSAppDeployFolderPath -ChildPath ".vscode\$scriptname"
+    . "$scriptPath"
+} else {
+    Write-Host "Not chaining to any other scripts"
+}
